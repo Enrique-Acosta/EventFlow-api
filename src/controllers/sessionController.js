@@ -67,7 +67,6 @@ export async function login (req, res) {
         })
     }else{
         const sessionData = {
-            id: user.id,
             email: user.email,
             role: user.role
         }
@@ -86,12 +85,8 @@ export async function login (req, res) {
 export function current (req, res){
    try {
         const { user }= req
-        const payload= {
-            id: user.id,
-            email: user.email,
-            role: user.role
-        }
-        res.status(200).json({status:'success', payload: payload})
+       
+        res.status(200).json({status:'success', user})
    } catch (error) {
         res.status(500).json({status:'error', message:'Error interno del servidor'})
    }
