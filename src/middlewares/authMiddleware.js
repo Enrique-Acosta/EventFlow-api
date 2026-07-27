@@ -18,24 +18,10 @@ export async function searchUser (req, res, next){
             });
         }
         req.user = user;  
+
         next();
 
     } catch (error) {
         next(error);
     }    
-}
-
-export function validateToken (req, res, next){
-    try { 
-        const token = req.signedCookies.jwt
-        if(!token){
-        return res.status(401).json({status:'error', message:'No autenticado'})
-        }
-        const payload = verifyToken(token)
-        req.user = payload
-        next()
-    } catch (error) {
-        res.status(401).json({status:'error', message:'Token invalido o expirado'})
-    }
-     
 }
