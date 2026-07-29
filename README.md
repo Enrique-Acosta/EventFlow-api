@@ -360,6 +360,58 @@ Este endpoint no requiere Passport, ya que únicamente elimina la cookie de aute
 
 ---
 
+# 👥 Roles y permisos
+
+La API implementa un sistema de autorización basado en roles. Cada usuario posee un rol que determina las acciones que puede realizar sobre los recursos de la plataforma.
+
+## Roles
+
+### Admin
+
+Cuenta con acceso completo a la plataforma.
+
+Puede:
+
+- Crear eventos.
+- Acceder y modificar cualquier evento.
+- Gestionar recursos sin restricciones de propiedad.
+
+---
+
+### Organizer
+
+Es el encargado de crear y administrar sus propios eventos.
+
+Puede:
+
+- Crear eventos.
+- Modificar únicamente los eventos de los que es propietario.
+
+---
+
+### User
+
+Representa a un usuario estándar de la plataforma.
+
+Puede:
+
+- Registrarse e iniciar sesión.
+- Consultar la información permitida por la API.
+- No puede crear ni modificar eventos.
+
+---
+
+## Matriz de permisos
+
+| Funcionalidad | Admin | Organizer | User |
+|---------------|:-----:|:---------:|:----:|
+| Registrarse | ✅ | ✅ | ✅ |
+| Iniciar sesión | ✅ | ✅ | ✅ |
+| Consultar `/sessions/current` | ✅ | ✅ | ✅ |
+| Crear eventos | ✅ | ✅ | ❌ |
+| Modificar sus propios eventos | ✅ | ✅ | ❌ |
+| Modificar eventos de otros usuarios | ✅ | ❌ | ❌ |
+
 # 🎮 Creación de eventos
 
 ## Endpoint
