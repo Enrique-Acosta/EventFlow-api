@@ -76,19 +76,19 @@ src/
 │   ├── env.js              # Variables de entorno
 │   └── passport.config.js  # Estrategias Passport (register, login y current)
 ├── controllers/
-│   ├── eventsController.js
+│   ├── eventsController.js   
 │   └── sessionController.js
 ├── dao/
 ├── middlewares/
-│   └── authMiddleware.js   # Búsqueda de usuario por email 
+│   └── authMiddleware.js   # Búsqueda de usuario por email y Autorizacion de roles
 ├── models/
 │   ├── eventModel.js
 │   └── userModel.js
 ├── repositories/
 ├── routes/
-│   ├── eventsRouter.js
+│   ├── eventsRouter.js   # Aplica middlwares de autorizacion en rutas protegidas
 │   ├── healthRouter.js
-│   └── sessionRouter.js
+│   └── sessionRouter.js  # Registro, login y current realizados con estrategias de passport
 ├── services/
 ├── utils/
 │   ├── bcrypt.js           # Helpers para hash y validación de contraseñas
@@ -171,8 +171,9 @@ La configuración actual permite agregar nuevas estrategias de autenticación (G
 | POST | /api/sessions/register | Registra un nuevo usuario. |
 | POST | /api/sessions/login | Login de usuario. |
 | POST | /api/sessions/logout | Cierra la sesión del usuario eliminando la cookie de autenticación. |
+| POST | /api/event  | Permite crear un evento si tiene las credenciales necesarias|
+| PUT |  /api/:eid   |  Verifica que el usuario autenticado sea el propietario del evento o tenga el rol admin. Actualmente no modifica el evento, solo valida la autorización.
 
----
 
 # 👤 Registro de usuarios
 
@@ -359,9 +360,120 @@ Este endpoint no requiere Passport, ya que únicamente elimina la cookie de aute
 
 ---
 
+# 🎮 Creación de eventos
+
+## Endpoint
+
+```
+POST /api/events
+```
+
+Permite crear un nuevo evento. El acceso está restringido a usuarios autenticados con rol **admin** u **organizer**.
+
+### Requisitos
+
+- Estar autenticado mediante JWT.
+- Poseer el rol **admin** o **organizer**.
+- Completar todos los campos obligatorios.
+
+### Body esperado
+
+```json
+{
+  "name": "Torneo de League of Legends",
+  "date": "2026-08-15T18:00:00.000Z",
+  "place": "Buenos Aires",
+  "price": 2500,
+  "capacity": 16
+}
+```
+
+### Validaciones implementadas
+
+1. El usuario debe estar autenticado.
+2. El usuario debe tener el rol **admin** u **organizer**.
+3. Todos los campos son obligatorios.
+4. El propietario del evento se obtiene automáticamente del usuario autenticado.
+
+### Respuesta exitosa
+
+```json
+{
+  "status": "Success",
+  "message": "Evento creado correctamente",
+  "payload": {
+    "_id": "...",
+    "name": "Torneo de League of Legends",
+    "date": "2026-08-15T18:00:00.000Z",
+    "place": "Buenos Aires",
+    "price": 2500,
+    "capacity": 16,
+    "status": true,
+    "owner": "665f2a..."
+  }
+}
+```
+
+### Posibles respuestas
+
+| Código | Descripción |
+|---------|-------------|
+| 201 | Evento creado correctamente. |
+| 400 | Faltan campos obligatorios. |
+| 401 | Usuario no autenticado. |
+| 403 | El usuario no posee permisos para crear eventos. |
+| 500 | Error interno del servidor. |
+
+---
+
+# ✏️ Actualización de eventos
+
+## Endpoint
+
+```
+PUT /api/events/:eid
+```
+
+Actualmente el endpoint valida la autorización del usuario sobre el evento. La lógica de actualización será incorporada en una etapa posterior.
+
+### Requisitos
+
+- Estar autenticado mediante JWT.
+- El evento debe existir.
+- Ser el propietario del evento o tener el rol **admin**.
+
+### Validaciones implementadas
+
+1. El usuario debe estar autenticado.
+2. El evento debe existir.
+3. Solo el propietario del evento o un administrador pueden acceder al recurso.
+
+### Respuesta exitosa
+
+```json
+{
+  "data": {
+    "...": "Evento autorizado"
+  }
+}
+```
+
+### Posibles respuestas
+
+| Código | Descripción |
+|---------|-------------|
+| 200 | Usuario autorizado sobre el evento. |
+| 401 | Usuario no autenticado. |
+| 403 | El usuario no tiene permisos sobre el evento. |
+| 404 | Evento no encontrado. |
+| 500 | Error interno del servidor. |
+
+
 # 🧪 Casos probados
 
 Se verificó el correcto funcionamiento de los siguientes escenarios:
+
+### Autenticación
 
 - ✅ Registro exitoso.
 - ✅ Registro con email duplicado.
@@ -372,6 +484,17 @@ Se verificó el correcto funcionamiento de los siguientes escenarios:
 - ✅ Acceso a `/current` con un token manipulado.
 - ✅ Logout.
 - ✅ Acceso a `/current` luego del logout (401 Unauthorized).
+
+### Autorización
+
+- ✅ Creación de eventos con un usuario autenticado con rol **admin**.
+- ✅ Creación de eventos con un usuario autenticado con rol **organizer**.
+- ✅ Intento de creación de eventos con un usuario sin permisos (403 Forbidden).
+- ✅ Intento de creación de eventos sin autenticación (401 Unauthorized).
+- ✅ Validación de propietario del evento para el endpoint `PUT /api/events/:eid`.
+- ✅ Acceso al endpoint `PUT /api/events/:eid` como administrador.
+- ✅ Acceso denegado al intentar modificar un evento perteneciente a otro usuario (403 Forbidden).
+- ✅ Intento de acceso a un evento inexistente (404 Not Found).
 
 ---
 
@@ -386,22 +509,68 @@ Se verificó el correcto funcionamiento de los siguientes escenarios:
 
 ---
 
-# 🧪 Cómo probar el registro
+# 🧪 Cómo probar la API
 
 Podés utilizar **Postman**, **Insomnia** o **Thunder Client**.
 
-### URL
+### Registro de usuarios
+
+**URL**
 
 ```
 POST http://localhost:3000/api/sessions/register
 ```
 
-### Headers
+**Headers**
 
 ```
 Content-Type: application/json
 ```
 
-### Body
+**Body**
 
-Seleccionar **raw → JSON** y enviar un objeto con los campos indicados en el ejemplo anterior.
+Seleccionar **raw → JSON** y enviar un objeto con los campos indicados en la sección **Registro de usuarios**.
+
+---
+
+### Login
+
+**URL**
+
+```
+POST http://localhost:3000/api/sessions/login
+```
+
+Una vez autenticado, la API devolverá una **cookie HTTP Only** firmada que deberá enviarse automáticamente en las solicitudes protegidas.
+
+---
+
+### Crear un evento
+
+**URL**
+
+```
+POST http://localhost:3000/api/events
+```
+
+**Requisitos**
+
+- Haber iniciado sesión.
+- Enviar la cookie JWT generada durante el login.
+- Poseer el rol **admin** u **organizer**.
+
+---
+
+### Validar autorización sobre un evento
+
+**URL**
+
+```
+PUT http://localhost:3000/api/events/:eid
+```
+
+**Requisitos**
+
+- Haber iniciado sesión.
+- Enviar la cookie JWT generada durante el login.
+- Ser el propietario del evento o tener el rol **admin**.

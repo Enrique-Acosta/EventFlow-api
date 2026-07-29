@@ -16,6 +16,6 @@ app.use(cookieParser(env.COOKIE_SECRET))
 app.use(passport.initialize())
 
 app.use('/api/health', healthRouter)
-app.use('/api/events', eventsRouter)
+app.use('/api/event', eventsRouter)
 app.use('/api/session', sessionRouter)
 export default app

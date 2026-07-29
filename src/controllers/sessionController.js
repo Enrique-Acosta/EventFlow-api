@@ -6,8 +6,8 @@ export async function register (req, res) {
     try {
         const {user}= req
         return res.status(201).json({
-            status:'Succes',
-            message:'Usuario creado correctamente',
+            status:'Success',
+            message:'Usuario creado correctamente.',
             payload:{
                 id: user.id,
                 first_name: user.first_name,
@@ -16,7 +16,7 @@ export async function register (req, res) {
             }
         })  
    }catch (error) {
-        return res.status(500).json({status:'Error', message:'Error interno del servidor'})
+        return res.status(500).json({status:'Error', message:'Error interno del servidor.'})
    } 
 }
 
@@ -30,7 +30,7 @@ export function current (req, res){
    try {
         
         res.status(200).json({
-            status:'success', 
+            status:'Success', 
             payload:{
                 id:req.user.id,
                 email: req.user.email,
@@ -38,14 +38,14 @@ export function current (req, res){
             }
     })
    } catch (error) {
-        res.status(500).json({status:'error', message:'Error interno del servidor'})
+        res.status(500).json({status:'Error', message:'Error interno del servidor'})
    }
 }
 
 export function logout (req, res) {
     res.clearCookie('jwt')
     res.status(200).json({
-    status: 'success',
+    status: 'Success',
     message: 'Logout correcto'
   })
 }
