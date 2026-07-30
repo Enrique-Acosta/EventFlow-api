@@ -48,7 +48,7 @@ export function authorizeRole(...allowedRoles){
 
 export async function authorizaEventOwnerOrAdmin (req, res, next){
     try {
-        const { eid } =req.params
+        const { eid } = req.params
         const event = await eventModel.findById(eid)
         if(!event){
             return res.status(404).json({
@@ -58,8 +58,10 @@ export async function authorizaEventOwnerOrAdmin (req, res, next){
         }
 
         const isAdmin = req.user.role === 'admin'
-        const isOwner = event.owner.toString() === req.user._id.toString()
-        if(!isAdmin && !isOwner){
+       
+        
+        const isOrganizer = event.organizer.toString() === req.user._id.toString()
+        if(!isAdmin && !isOrganizer){
             return res.status(403).json({
                 status:'Error',
                 message:'No cuentas con los permisos necesario para realizar esta accion'

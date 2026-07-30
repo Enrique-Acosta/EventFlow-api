@@ -1,7 +1,17 @@
 import { Schema, Types, model } from "mongoose";
 
 const eventSchema = new Schema({
-   name: {
+   title: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    description:{
+        type: String,
+        required: true,
+        trim:true
+    },
+    category:{
         type: String,
         required: true,
         trim: true
@@ -10,7 +20,7 @@ const eventSchema = new Schema({
         type: Date,
         required: true
     },
-    place: {
+    location: {
         type: String,
         required: true,
         trim: true
@@ -26,10 +36,11 @@ const eventSchema = new Schema({
         min: 0
     },
     status: {
-        type: Boolean,
-        default: true
+        type: String,
+        enum:['draft','published','cancelled','finished'],
+        default: 'published'
     },
-    owner:{
+    organizer:{
         type: Types.ObjectId,
         ref: 'user'
     }

@@ -408,9 +408,67 @@ Puede:
 | Registrarse | ✅ | ✅ | ✅ |
 | Iniciar sesión | ✅ | ✅ | ✅ |
 | Consultar `/sessions/current` | ✅ | ✅ | ✅ |
+| Consultar eventos | ✅ | ✅ | ✅ |
 | Crear eventos | ✅ | ✅ | ❌ |
 | Modificar sus propios eventos | ✅ | ✅ | ❌ |
 | Modificar eventos de otros usuarios | ✅ | ❌ | ❌ |
+
+---
+
+# 🔍 Consulta de eventos
+
+## Endpoint
+
+```
+GET /api/events
+```
+
+Permite obtener el listado de eventos registrados.
+
+El endpoint es público y no requiere autenticación.
+
+---
+
+## Filtros disponibles
+
+El endpoint permite filtrar, ordenar y paginar los resultados mediante parámetros de consulta.
+
+| Parámetro | Descripción |
+|-----------|-------------|
+| `category` | Filtra eventos por categoría. |
+| `status` | Filtra eventos por estado (`draft`, `published`, `cancelled`, `finished`). |
+| `location` | Filtra eventos por ubicación. |
+| `fromDate` | Obtiene eventos desde una fecha determinada. |
+| `toDate` | Obtiene eventos hasta una fecha determinada. |
+| `page` | Página actual de resultados. Valor por defecto: `1`. |
+| `limit` | Cantidad de eventos por página. Valor por defecto: `10`. |
+| `sort` | Campo utilizado para ordenar resultados. Valor por defecto: `date`. |
+
+### Ejemplo
+
+```
+GET /api/events?category=Esports&location=Buenos Aires&page=1&limit=5
+```
+
+---
+
+## Respuesta exitosa
+
+```json
+{
+  "result": {
+    "events": [],
+    "pagination": {
+      "total": 0,
+      "page": 1,
+      "limit": 10,
+      "totalPages": 0
+    }
+  }
+}
+```
+
+---
 
 # 🎮 Creación de eventos
 
@@ -420,34 +478,49 @@ Puede:
 POST /api/events
 ```
 
-Permite crear un nuevo evento. El acceso está restringido a usuarios autenticados con rol **admin** u **organizer**.
+Permite crear un nuevo evento.
 
-### Requisitos
+El acceso está restringido a usuarios autenticados con rol **admin** u **organizer**.
+
+---
+
+## Requisitos
 
 - Estar autenticado mediante JWT.
 - Poseer el rol **admin** o **organizer**.
 - Completar todos los campos obligatorios.
 
-### Body esperado
+---
+
+## Body esperado
 
 ```json
 {
-  "name": "Torneo de League of Legends",
+  "title": "Torneo de League of Legends",
+  "description": "Competencia abierta para equipos amateur.",
+  "category": "Esports",
   "date": "2026-08-15T18:00:00.000Z",
-  "place": "Buenos Aires",
+  "location": "Buenos Aires",
   "price": 2500,
   "capacity": 16
 }
 ```
 
-### Validaciones implementadas
+---
 
-1. El usuario debe estar autenticado.
-2. El usuario debe tener el rol **admin** u **organizer**.
-3. Todos los campos son obligatorios.
-4. El propietario del evento se obtiene automáticamente del usuario autenticado.
+## Validaciones implementadas
 
-### Respuesta exitosa
+- El usuario debe estar autenticado.
+- El usuario debe tener el rol **admin** u **organizer**.
+- Todos los campos son obligatorios.
+- La fecha del evento debe ser futura.
+- La capacidad debe ser mayor que cero.
+- El precio no puede ser negativo.
+- El organizador se obtiene automáticamente desde el usuario autenticado.
+
+---
+
+## Respuesta exitosa
 
 ```json
 {
@@ -455,23 +528,27 @@ Permite crear un nuevo evento. El acceso está restringido a usuarios autenticad
   "message": "Evento creado correctamente",
   "payload": {
     "_id": "...",
-    "name": "Torneo de League of Legends",
+    "title": "Torneo de League of Legends",
+    "description": "Competencia abierta para equipos amateur.",
+    "category": "Esports",
     "date": "2026-08-15T18:00:00.000Z",
-    "place": "Buenos Aires",
+    "location": "Buenos Aires",
     "price": 2500,
     "capacity": 16,
-    "status": true,
-    "owner": "665f2a..."
+    "status": "published",
+    "organizer": "665f2a..."
   }
 }
 ```
 
-### Posibles respuestas
+---
+
+## Posibles respuestas
 
 | Código | Descripción |
 |---------|-------------|
 | 201 | Evento creado correctamente. |
-| 400 | Faltan campos obligatorios. |
+| 400 | Error de validación o faltan campos obligatorios. |
 | 401 | Usuario no autenticado. |
 | 403 | El usuario no posee permisos para crear eventos. |
 | 500 | Error interno del servidor. |
@@ -486,40 +563,53 @@ Permite crear un nuevo evento. El acceso está restringido a usuarios autenticad
 PUT /api/events/:eid
 ```
 
-Actualmente el endpoint valida la autorización del usuario sobre el evento. La lógica de actualización será incorporada en una etapa posterior.
+Permite actualizar un evento existente.
 
-### Requisitos
+Antes de realizar la modificación, la API verifica que el usuario autenticado sea el organizador del evento o tenga el rol **admin**.
+
+---
+
+## Requisitos
 
 - Estar autenticado mediante JWT.
 - El evento debe existir.
 - Ser el propietario del evento o tener el rol **admin**.
 
-### Validaciones implementadas
+---
 
-1. El usuario debe estar autenticado.
-2. El evento debe existir.
-3. Solo el propietario del evento o un administrador pueden acceder al recurso.
+## Validaciones implementadas
 
-### Respuesta exitosa
+- El usuario debe estar autenticado.
+- El evento debe existir.
+- Solo el organizador del evento o un administrador pueden modificarlo.
+- La fecha debe ser futura.
+- La capacidad debe ser mayor que cero.
+- El precio no puede ser negativo.
+
+---
+
+## Respuesta exitosa
 
 ```json
 {
   "data": {
-    "...": "Evento autorizado"
+    "...": "Evento actualizado"
   }
 }
 ```
 
-### Posibles respuestas
+---
+
+## Posibles respuestas
 
 | Código | Descripción |
 |---------|-------------|
-| 200 | Usuario autorizado sobre el evento. |
+| 200 | Evento actualizado correctamente. |
+| 400 | Error de validación. |
 | 401 | Usuario no autenticado. |
 | 403 | El usuario no tiene permisos sobre el evento. |
 | 404 | Evento no encontrado. |
 | 500 | Error interno del servidor. |
-
 
 # 🧪 Casos probados
 
