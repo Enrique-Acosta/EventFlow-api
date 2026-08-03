@@ -45,6 +45,11 @@ PORT=
 MONGO_URL=
 JWT_SECRET=
 COOKIE_SECRET=
+MAIL_HOST=
+MAIL_PORT=
+MAIL_USER=
+MAIL_PASS=
+MAIL_FROM=
 ```
 
 ---
@@ -72,27 +77,43 @@ src/
 ├── app.js
 ├── server.js
 ├── config/
-│   ├── database.js         # Configuración de MongoDB
-│   ├── env.js              # Variables de entorno
-│   └── passport.config.js  # Estrategias Passport (register, login y current)
+│   ├── database.js            # Configuración de MongoDB
+│   ├── env.js                 # Variables de entorno
+│   ├── passport.config.js     # Estrategias Passport (register, login y current)
+│   └── nodemailer.js          # Configuración del servicio de correo electrónico
+│
 ├── controllers/
-│   ├── eventsController.js   
-│   └── sessionController.js
+│   ├── eventsController.js
+│   ├── sessionController.js
+│   └── ticketController.js    # Controladores relacionados con tickets
+│
 ├── dao/
+│
 ├── middlewares/
-│   └── authMiddleware.js   # Búsqueda de usuario por email y Autorizacion de roles
+│   └── authMiddleware.js      # Búsqueda de usuario por email y autorización de roles
+│
 ├── models/
 │   ├── eventModel.js
-│   └── userModel.js
+│   ├── userModel.js
+│   └── ticketModel.js         # Modelo de tickets y sus relaciones
+│
 ├── repositories/
+│
 ├── routes/
-│   ├── eventsRouter.js   # Aplica middlwares de autorizacion en rutas protegidas
+│   ├── eventsRouter.js        # Rutas de eventos con middlewares de autorización
 │   ├── healthRouter.js
-│   └── sessionRouter.js  # Registro, login y current realizados con estrategias de passport
+│   ├── sessionRouter.js       # Registro, login y current con Passport
+│   └── ticketRouter.js        # Rutas relacionadas con compra y gestión de tickets
+│
 ├── services/
+│   ├── eventServices.js       # Lógica de negocio de eventos
+│   ├── mailServices.js        # Servicios para envío de correos
+│   └── ticketServices.js      # Lógica de negocio de tickets
+│
 ├── utils/
-│   ├── bcrypt.js           # Helpers para hash y validación de contraseñas
-│   └── jwt.js              # Helpers para generar y validar JWT
+│   ├── bcrypt.js              # Helpers para hash y validación de contraseñas
+│   ├── jwt.js                 # Helpers para generar y validar JWT
+│   └── validators.js          # Helpers para validar algunos campos de los eventos
 └── .env.example
 ```
 
@@ -168,11 +189,15 @@ La configuración actual permite agregar nuevas estrategias de autenticación (G
 | GET | /api/health | Verifica que el servidor está activo. |
 | GET | /api/events | Devuelve una lista de eventos (vacía en esta etapa). |
 | GET | /api/sessions/current | Devuelve los datos del usuario autenticado mediante el token. |
+| GET | /api/tickets/my-tickets | Devuelve los tickets pertenecientes al usuario autenticado. |
+| GET | /api/events/:eid/tickets | Devuelve los tickets de un evento. Requiere que el usuario sea el organizer propietario del evento o tenga rol admin. |
 | POST | /api/sessions/register | Registra un nuevo usuario. |
 | POST | /api/sessions/login | Login de usuario. |
 | POST | /api/sessions/logout | Cierra la sesión del usuario eliminando la cookie de autenticación. |
-| POST | /api/event  | Permite crear un evento si tiene las credenciales necesarias|
-| PUT |  /api/:eid   |  Verifica que el usuario autenticado sea el propietario del evento o tenga el rol admin. Actualmente no modifica el evento, solo valida la autorización.
+| POST | /api/event | Permite crear un evento si tiene las credenciales necesarias. |
+| POST | /api/events/:eid/tickets | Permite comprar/crear un ticket para un evento si el usuario está autenticado. |
+| PUT | /api/:eid | Verifica que el usuario autenticado sea el propietario del evento o tenga el rol admin. Actualmente no modifica el evento, solo valida la autorización. |
+| PATCH | /api/tickets/:tid/cancel | Permite cancelar un ticket existente. |
 
 
 # 👤 Registro de usuarios
@@ -412,6 +437,11 @@ Puede:
 | Crear eventos | ✅ | ✅ | ❌ |
 | Modificar sus propios eventos | ✅ | ✅ | ❌ |
 | Modificar eventos de otros usuarios | ✅ | ❌ | ❌ |
+| Crear/comprar tickets para eventos | ✅ | ✅ | ✅ |
+| Consultar sus propios tickets (`/tickets/my-tickets`) | ✅ | ✅ | ✅ |
+| Consultar tickets de sus eventos (`/events/:eid/tickets`) | ✅ | ✅ | ❌ |
+| Consultar tickets de eventos de otros usuarios | ✅ | ❌ | ❌ |
+| Cancelar tickets | ✅ | ✅ | ✅ |
 
 ---
 
@@ -610,6 +640,284 @@ Antes de realizar la modificación, la API verifica que el usuario autenticado s
 | 403 | El usuario no tiene permisos sobre el evento. |
 | 404 | Evento no encontrado. |
 | 500 | Error interno del servidor. |
+
+# 🎟️ Creación de tickets
+
+## Endpoint
+
+```
+POST /api/events/:eid/tickets
+```
+
+Permite crear un ticket para un evento determinado.
+
+El acceso está restringido a **usuarios autenticados** mediante JWT.
+
+---
+
+## Requisitos
+
+- Estar autenticado mediante JWT.
+- El evento debe existir.
+- El evento debe encontrarse en estado **published**.
+- Deben existir lugares disponibles para la cantidad de tickets solicitados.
+
+---
+
+## Body esperado
+
+```json
+{
+  "quantity": 2
+}
+```
+- La cantidad es opcional. Si no se envía, se asigna por defecto el valor 1.
+
+```
+Parámetros esperados
+:eid
+```
+ID del evento para el cual se desea crear el ticket.
+
+## Validaciones implementadas:
+- El usuario debe estar autenticado.
+- El evento debe existir.
+- El evento debe estar disponible para la compra (status: published).
+- La cantidad de tickets no puede ser menor a cero.
+- La cantidad solicitada no puede superar la cantidad de lugares disponibles.
+- El usuario autenticado se asigna automáticamente como propietario del ticket.
+- Se genera un código único para el ticket.
+- Se envía un email de confirmación con los datos del ticket.
+
+## Respuesta exitosa:
+``` json
+{
+  "status": "Success",
+  "payload": {
+    "_id": "665f2a...",
+    "user": "665f1b...",
+    "event": "665f2b...",
+    "quantity": 2,
+    "status": "active",
+    "code": "ABC123",
+    "cancelledAt": null
+  }
+}
+```
+
+Posibles respuestas
+| Código	|    Descripción                         |
+| 201	    | Ticket creado correctamente.           |
+| 404	    | Evento no encontrado.                  |
+| 409	    | No hay suficientes lugares disponibles.|
+| 500	    | Error interno del servidor.            |
+
+
+
+# 🎟️ Consulta de tickets de un evento
+
+## Endpoint
+
+
+GET /api/events/:eid/tickets
+
+
+Permite consultar todos los tickets asociados a un evento específico.
+
+El acceso está restringido a usuarios autenticados que sean **organizers propietarios del evento** o usuarios con rol **admin**.
+
+---
+
+## Requisitos
+
+- Estar autenticado mediante JWT.
+- Poseer el rol **admin** o ser el **organizer propietario del evento**.
+- El evento debe existir.
+
+---
+
+## Parámetros esperados
+
+``` 
+:eid
+```
+- ID del evento del cual se desean obtener los tickets.
+
+## Validaciones implementadas:
+- El usuario debe estar autenticado.
+- El evento debe existir.
+- El usuario debe ser el propietario del evento o tener rol admin.
+- Solo se obtienen los tickets correspondientes al evento solicitado.
+- La información del usuario asociado al ticket es incluida mediante populate, mostrando:
+- Nombre.
+- Apellido.
+- Email.
+## Respuesta exitosa
+```json
+{
+  "status": "Success",
+  "payload": [
+    {
+      "_id": "665f2a...",
+      "user": {
+        "first_name": "Juan",
+        "last_name": "Pérez",
+        "email": "juan@email.com"
+      },
+      "event": "665f2b...",
+      "status": "active",
+      "quantity": 1,
+      "code": "ABC123",
+      "cancelledAt": null
+    }
+  ]
+}
+```
+## Posibles respuestas
+| Código | Descripción |
+|---------|-------------|
+| 200 | Tickets obtenidos correctamente. |
+| 403 | El usuario no posee lo permisos para realizar esta peticion. |
+| 401 | Usuario no autenticado. |
+| 404 | Evento no encontrado. |
+| 500 | Error interno del servidor. |
+
+
+# 🎟️ Consulta de tickets propios
+
+## Endpoint
+
+```
+GET /api/tickets/my-tickets
+```
+
+Permite consultar todos los tickets pertenecientes al usuario autenticado.
+
+El acceso está restringido a usuarios autenticados mediante JWT.
+
+---
+
+## Requisitos
+
+- Estar autenticado mediante JWT.
+- El usuario debe poseer tickets registrados.
+
+---
+
+## Validaciones implementadas
+
+- El usuario debe estar autenticado.
+- Solo se obtienen los tickets asociados al usuario autenticado.
+- La información del evento asociado al ticket se incluye mediante `populate`, mostrando:
+  - Título del evento.
+  - Fecha del evento.
+  - Ubicación del evento.
+
+---
+
+## Respuesta exitosa
+
+```json
+{
+  "status": "Success",
+  "payload": [
+    {
+      "_id": "665f2a...",
+      "user": "665f1b...",
+      "event": {
+        "_id": "665f2b...",
+        "title": "Torneo de League of Legends",
+        "date": "2026-08-15T18:00:00.000Z",
+        "location": "Buenos Aires"
+      },
+      "status": "active",
+      "quantity": 1,
+      "code": "ABC123",
+      "cancelledAt": null
+    }
+  ]
+}
+```
+Posibles respuestas
+|Código	| Descripción | 
+|-------|---------------------------------|
+|200	  | Tickets obtenidos correctamente.|
+|401	  | Usuario no autenticado.         |
+|500	  | Error interno del servidor.     |
+|-----------------------------------------|
+
+
+# ❌ Cancelación de tickets
+
+## Endpoint
+
+
+PATCH /api/tickets/:tid/cancel
+
+
+Permite cancelar un ticket existente.
+
+El acceso está restringido a usuarios autenticados que sean propietarios del ticket o usuarios con rol **admin**.
+
+---
+
+## Requisitos
+
+- Estar autenticado mediante JWT.
+- Ser el propietario del ticket o poseer el rol **admin**.
+- El ticket debe existir.
+- El ticket no debe encontrarse previamente cancelado.
+
+---
+
+## Parámetros esperados
+
+```
+:tid
+
+
+ID del ticket que se desea cancelar.
+```
+---
+
+## Validaciones implementadas
+
+- El usuario debe estar autenticado.
+- El ticket debe existir.
+- El usuario debe ser el propietario del ticket o tener rol **admin**.
+- Un ticket que ya se encuentra cancelado no puede volver a cancelarse.
+- Al cancelar el ticket:
+- Se actualiza el estado a `cancelled`.
+- Se registra la fecha de cancelación en `cancelledAt`.
+
+---
+
+## Respuesta exitosa
+
+```json
+{
+  "message": "EL ticket fue cancelado",
+  "payload": {
+    "_id": "665f2a...",
+    "user": "665f1b...",
+    "event": "665f2b...",
+    "status": "cancelled",
+    "quantity": 1,
+    "code": "ABC123",
+    "cancelledAt": "2026-08-03T18:00:00.000Z"
+  }
+}
+```
+## Posibles respuestas: 
+
+|Código	 |                    Descripción                     
+|-----------------------------------------------------------------|
+|200	   | Ticket cancelado correctamente.                        |
+|403	   | El usuario no posee permisos para cancelar este ticket.|
+|404	   | Ticket no encontrado.                                  |
+|500	   | Error interno del servidor.                             |
+
+
 
 # 🧪 Casos probados
 

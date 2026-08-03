@@ -1,4 +1,5 @@
 import { eventModel } from "../models/eventModel.js";
+import { ticketModel } from "../models/ticketModel.js";
 import { userModel } from "../models/userModel.js";
 import { verifyToken } from "../utils/jwt.js";
 
@@ -73,4 +74,33 @@ export async function authorizaEventOwnerOrAdmin (req, res, next){
     } catch (error) {
         next(error)
     }
+}
+
+export async function authorizeTicketOwnerOrAdmin(req, res, next) {
+   try {
+     const { tid } = req.params
+    const ticket = await ticketModel.findById(tid)
+    if(!ticket){
+            return res.status(404).json({
+                status:'Error',
+                message:'Ticket no encontrado'
+            })
+        }
+
+        const isAdmin = req.user.role === 'admin'
+       
+        
+        const isOwner = ticket.user.toString() === req.user._id.toString()
+        if(!isAdmin && !isOwner){
+            return res.status(403).json({
+                status:'Error',
+                message:'No cuentas con los permisos necesario para realizar esta accion'
+            })
+        }
+
+        req.ticket = ticket     
+        next()
+   } catch (error) {
+        next (error)
+   }
 }
