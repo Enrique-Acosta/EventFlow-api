@@ -19,7 +19,8 @@ router.get('/:eid/tickets',
 router.post('/', 
     passport.authenticate('current',{session : false}),
     authorizeRole('admin','organizer'),
-    createEvent)
+    createEvent
+)
 
 router.post('/:eid/tickets',
     passport.authenticate('current',{session : false}), 

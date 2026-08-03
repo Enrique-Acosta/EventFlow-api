@@ -91,13 +91,14 @@ export async function createEventService (data) {
 
 export async function updateEventService(data) {
 
-    if (data.status === 'cancelled')throw new Error("Este evento ya fue cancelado")
+    const event = await eventModel.findById(data.id)
+    
+    if (!event)throw new Error("No se encontro el evento")
+    if (event.status === "cancelled") throw new Error("Este envento ya fue cancelado");
     validateDate(data.date)
     validateCapacity(data.capacity)
     validatePrice(data.price)
-    const event = await eventModel.findByIdAndUpdate(data.id, data, {new:true})
-    if(!event) throw new Error("Evento no encontrado");
+    const updatedEvent = await eventModel.findByIdAndUpdate(data.id, data, {new:true})  
    
-
-    return event
+    return updatedEvent
 }
